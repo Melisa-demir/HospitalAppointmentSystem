@@ -5,5 +5,7 @@
   <Project Path="ApiGateway/ApiGateway.csproj" />
   <Project Path="AppointmentService/AppointmentService.csproj" />
   <Project Path="DoctorService/DoctorService.csproj" />
+  <Project Path="NotificationService/NotificationService.csproj" Id="9fdb5617-4a0b-4d09-b6d3-47ae4b69323b" />
   <Project Path="PatientService/PatientService.csproj" />
+  <Project Path="Shared.Contracts/Shared.Contracts.csproj" Id="08f37ae9-f17f-4a5c-84dd-1570c5386103" />
 </Solution>
