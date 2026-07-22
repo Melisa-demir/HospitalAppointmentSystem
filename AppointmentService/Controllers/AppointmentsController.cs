@@ -12,9 +12,11 @@ namespace AppointmentService.Controllers
     public class AppointmentsController : ControllerBase
     {
         private readonly AppointmentDbContext _context;
-        public AppointmentsController(AppointmentDbContext context)
+        private readonly IHttpClientFactory _httpClientFactory;
+        public AppointmentsController(AppointmentDbContext context, IHttpClientFactory httpClientFactory)
         {
             _context = context;
+            _httpClientFactory = httpClientFactory;
         }
 
         [HttpGet]
@@ -46,6 +48,38 @@ namespace AppointmentService.Controllers
             {
                 return BadRequest("Randevu tarihini gelecekte olmalıdır");
             }
+            var patientClient = _httpClientFactory.CreateClient("PatientService");
+
+            var patientResponse = await patientClient.GetAsync($"/api/patients/{request.PatientId}");
+
+            if(!patientResponse.IsSuccessStatusCode)
+            {
+                return BadRequest("Hasta bulunamadı");
+            }
+
+
+            var doctorClient = _httpClientFactory.CreateClient("DoctorService");
+            var doctorResponse = await doctorClient.GetAsync($"/api/doctors/{request.DoctorId}");
+            if(!doctorResponse.IsSuccessStatusCode)
+            {
+                return BadRequest("Doktor bulunamadı");
+            }
+
+
+            var doctor = await doctorResponse.Content.ReadFromJsonAsync<DoctorResponse>();
+
+            
+            if(doctor is null)
+            {
+                return BadRequest("Doktor bilgisi alınamadı");
+            }
+
+            
+            if(!doctor.IsAvailable)
+            {
+                return BadRequest("Doktor müsait değil");
+            }
+
             var appointment = new Appointment
             {
                 PatientId = request.PatientId,
@@ -55,7 +89,6 @@ namespace AppointmentService.Controllers
                 Status = AppointmentStatus.Scheduled,
                 CreatedAt = DateTime.Now
             };
-
             _context.Appointments.Add(appointment);
             await _context.SaveChangesAsync();
             return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, appointment);

@@ -8,11 +8,11 @@ namespace DoctorService.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class DoctorController : ControllerBase
+    public class DoctorsController : ControllerBase
     {
         private readonly DoctorDbContext _context;
 
-        public DoctorController(DoctorDbContext context)
+        public DoctorsController(DoctorDbContext context)
         {
             _context = context;
         }
