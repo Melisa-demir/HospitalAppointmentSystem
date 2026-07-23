@@ -1,3 +1,4 @@
+using AppointmentService.Services;
 using AppointmentService.Data;
 using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
@@ -26,6 +27,8 @@ builder.Services.AddHttpClient("DoctorService", client =>
     client.BaseAddress = new Uri(
         builder.Configuration["ServiceUrls:DoctorService"]!);
 });
+
+builder.Services.AddScoped<IRabbitMqPublisher, RabbitMqPublisher>();
 
 var app = builder.Build();
 

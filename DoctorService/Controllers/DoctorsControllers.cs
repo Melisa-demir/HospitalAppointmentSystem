@@ -30,6 +30,17 @@ namespace DoctorService.Controllers
             return Ok(doctor);
         }
 
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetById(int id)
+        {
+            var doctor = await _context.Doctors
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == id);
+            if (doctor is null)
+                return NotFound();
+            return Ok(doctor);
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create(CreateDoctorRequest request)
         {
@@ -61,5 +72,5 @@ namespace DoctorService.Controllers
 
             return Ok(doctor);
         }
-    }
+}
 }

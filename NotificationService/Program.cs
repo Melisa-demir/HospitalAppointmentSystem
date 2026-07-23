@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using NotificationService.Data;
+using NotificationService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +19,9 @@ builder.Services.AddDbContext<NotificationDbContext>(options =>
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<NotificationDbContext>();
+
+builder.Services
+    .AddHostedService<AppointmentCreatedConsumer>();
 
 var app = builder.Build();
 

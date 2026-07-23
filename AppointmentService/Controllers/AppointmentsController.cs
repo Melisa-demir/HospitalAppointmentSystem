@@ -2,8 +2,11 @@
 using AppointmentService.Entities;
 using AppointmentService.Enums;
 using AppointmentService.Models;
+using AppointmentService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Shared.Contracts;
+
 
 namespace AppointmentService.Controllers
 {
@@ -13,10 +16,12 @@ namespace AppointmentService.Controllers
     {
         private readonly AppointmentDbContext _context;
         private readonly IHttpClientFactory _httpClientFactory;
-        public AppointmentsController(AppointmentDbContext context, IHttpClientFactory httpClientFactory)
+        private readonly IRabbitMqPublisher _rabbitMqPublisher;
+        public AppointmentsController(AppointmentDbContext context, IHttpClientFactory httpClientFactory, IRabbitMqPublisher rabbitMqPublisher)
         {
             _context = context;
             _httpClientFactory = httpClientFactory;
+            _rabbitMqPublisher = rabbitMqPublisher;
         }
 
         [HttpGet]
@@ -52,30 +57,48 @@ namespace AppointmentService.Controllers
 
             var patientResponse = await patientClient.GetAsync($"/api/patients/{request.PatientId}");
 
-            if(!patientResponse.IsSuccessStatusCode)
+            if (!patientResponse.IsSuccessStatusCode)
             {
                 return BadRequest("Hasta bulunamadı");
             }
 
+            var patient =
+            await patientResponse.Content
+                .ReadFromJsonAsync<PatientResponse>();
+
+            if (patient is null)
+            {
+                return BadRequest("Hasta bilgisi alınamadı.");
+            }
+
 
             var doctorClient = _httpClientFactory.CreateClient("DoctorService");
-            var doctorResponse = await doctorClient.GetAsync($"/api/doctors/{request.DoctorId}");
-            if(!doctorResponse.IsSuccessStatusCode)
+            var doctorResponse = await doctorClient.GetAsync(
+                $"/api/Doctors/{request.DoctorId}");
+
+            if (!doctorResponse.IsSuccessStatusCode)
             {
-                return BadRequest("Doktor bulunamadı");
+                var errorBody = await doctorResponse.Content.ReadAsStringAsync();
+
+                return BadRequest(new
+                {
+                    Message = "DoctorService isteği başarısız.",
+                    StatusCode = (int)doctorResponse.StatusCode,
+                    Response = errorBody
+                });
             }
 
 
             var doctor = await doctorResponse.Content.ReadFromJsonAsync<DoctorResponse>();
 
-            
-            if(doctor is null)
+
+            if (doctor is null)
             {
                 return BadRequest("Doktor bilgisi alınamadı");
             }
 
-            
-            if(!doctor.IsAvailable)
+
+            if (!doctor.IsAvailable)
             {
                 return BadRequest("Doktor müsait değil");
             }
@@ -91,7 +114,21 @@ namespace AppointmentService.Controllers
             };
             _context.Appointments.Add(appointment);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, appointment);
+            var appointmentCreatedEvent = new AppointmentCreatedEvent(
+            appointment.Id,
+            appointment.PatientId,
+            appointment.DoctorId,
+            appointment.AppointmentDate,
+            patient.Email,
+            doctor.Email);
+
+            await _rabbitMqPublisher.PublishAppointmentCreatedAsync(
+                appointmentCreatedEvent);
+
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = appointment.Id },
+                appointment);
         }
 
         [HttpPut("{id:int}/cancel")]
