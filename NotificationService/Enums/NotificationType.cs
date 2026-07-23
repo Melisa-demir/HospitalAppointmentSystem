@@ -4,6 +4,7 @@
     {
         AppointmentCreated = 1,
         AppointmentUpdated = 2,
-        AppointmentCancelled = 3
+        AppointmentCancelled = 3,
+        AppointmentReminder = 4
     }
 }

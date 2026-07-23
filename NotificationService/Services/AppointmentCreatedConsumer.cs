@@ -8,6 +8,8 @@ using NotificationService.Enums;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Shared.Contracts;
+using Hangfire;
+using NotificationService.Jobs;
 
 namespace NotificationService.Services;
 
@@ -15,17 +17,20 @@ public class AppointmentCreatedConsumer : BackgroundService
 {
     private readonly IConfiguration _configuration;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IBackgroundJobClient _backgroundJobClient;
 
     private IConnection? _connection;
     private IModel? _channel;
 
     public AppointmentCreatedConsumer(
         IConfiguration configuration,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        IBackgroundJobClient backgroundJobClient)
     {
         _configuration = configuration;
         _scopeFactory = scopeFactory;
-    }
+        _backgroundJobClient = backgroundJobClient;
+    }   
 
     protected override Task ExecuteAsync(
         CancellationToken stoppingToken)
@@ -61,6 +66,8 @@ public class AppointmentCreatedConsumer : BackgroundService
 
         consumer.Received += async (_, eventArgs) =>
         {
+            Console.WriteLine("RabbitMQ mesajı alındı.");
+
             try
             {
                 var json = Encoding.UTF8.GetString(
@@ -111,6 +118,34 @@ public class AppointmentCreatedConsumer : BackgroundService
 
                 await dbContext.SaveChangesAsync(
                     stoppingToken);
+
+                Console.WriteLine("Notification veritabanına kaydedildi.");
+
+                var reminderTime =
+                appointmentEvent.AppointmentDate.AddHours(-1);
+
+                Console.WriteLine($"Reminder Time: {reminderTime}");
+                Console.WriteLine($"Now: {DateTime.Now}");
+
+                if (reminderTime <= DateTime.Now)
+                {
+                    _backgroundJobClient.Enqueue<AppointmentReminderJob>(
+                        job => job.ExecuteAsync(
+                            appointmentEvent.AppointmentId,
+                            appointmentEvent.PatientEmail,
+                            appointmentEvent.AppointmentDate));
+                }
+                else
+                {
+                    Console.WriteLine("Schedule çalıştı.");
+
+                    _backgroundJobClient.Schedule<AppointmentReminderJob>(
+                        job => job.ExecuteAsync(
+                            appointmentEvent.AppointmentId,
+                            appointmentEvent.PatientEmail,
+                            appointmentEvent.AppointmentDate),
+                        reminderTime);
+                }
 
                 _channel.BasicAck(
                     deliveryTag: eventArgs.DeliveryTag,

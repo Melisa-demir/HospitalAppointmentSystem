@@ -1,5 +1,9 @@
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.EntityFrameworkCore;
 using NotificationService.Data;
+using NotificationService.Jobs;
+using NotificationService.Models;
 using NotificationService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +27,23 @@ builder.Services.AddHealthChecks()
 builder.Services
     .AddHostedService<AppointmentCreatedConsumer>();
 
+builder.Services.AddHangfire(configuration =>
+{
+    configuration.UseSqlServerStorage(
+        builder.Configuration.GetConnectionString("HangfireDb"),
+        new SqlServerStorageOptions
+        {
+            PrepareSchemaIfNecessary = true
+        });
+});
+
+builder.Services.AddHangfireServer();
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection("EmailSettings"));
+
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<AppointmentReminderJob>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -35,6 +56,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
+
+app.UseHangfireDashboard("/hangfire");
 
 app.MapControllers();
 
